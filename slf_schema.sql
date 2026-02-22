@@ -14,3 +14,18 @@ CREATE TABLE IF NOT EXISTS slf.deals (
     last_synced_at TIMESTAMP DEFAULT NOW(),
     UNIQUE(slf_id, product_family)
 );
+
+CREATE TABLE IF NOT EXISTS slf_deal_logs (
+  id SERIAL PRIMARY KEY,
+  deal_id TEXT,
+  headers JSONB,
+  ip TEXT,
+  error TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS slf_idempotency (
+  idempotency_key TEXT PRIMARY KEY,
+  request_hash TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);

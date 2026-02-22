@@ -2,17 +2,18 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is required");
-}
-
-if (!process.env.API_KEY) {
-  throw new Error("API_KEY is required");
+function required(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
 }
 
 export const env = {
-  DATABASE_URL: process.env.DATABASE_URL,
-  API_KEY: process.env.API_KEY,
+  DATABASE_URL: required("DATABASE_URL"),
+  API_KEY: required("API_KEY"),
+  HMAC_SECRET: required("HMAC_SECRET"),
   PORT: process.env.PORT || "4001",
 };
 
