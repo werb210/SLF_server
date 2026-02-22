@@ -19,11 +19,15 @@ export function hmacValidator(req: Request, res: Response, next: NextFunction) {
     return res.status(401).json({ error: "Missing signature" });
   }
 
-  const payload = JSON.stringify(req.body);
+  const rawBody = (req as any).rawBody;
+
+  if (!rawBody) {
+    return res.status(400).json({ error: "Raw body missing" });
+  }
 
   const expected = crypto
     .createHmac("sha256", env.HMAC_SECRET)
-    .update(payload)
+    .update(rawBody)
     .digest("hex");
 
   if (signature !== expected) {

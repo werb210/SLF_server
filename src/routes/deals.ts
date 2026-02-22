@@ -23,10 +23,16 @@ router.post("/", limiter, apiKeyAuth, hmacValidator, async (req, res, next) => {
     const idempotencyKey = req.header("x-idempotency-key");
     const requestHash = crypto
       .createHash("sha256")
-      .update(JSON.stringify(req.body))
+      .update((req as any).rawBody)
       .digest("hex");
 
     if (idempotencyKey) {
+      // Cleanup old keys (24hr window)
+      await pool.query(
+        `DELETE FROM slf_idempotency
+         WHERE created_at < NOW() - INTERVAL '24 hours'`
+      );
+
       const existing = await pool.query(
         `SELECT * FROM slf_idempotency WHERE idempotency_key = $1`,
         [idempotencyKey]
@@ -38,7 +44,7 @@ router.post("/", limiter, apiKeyAuth, hmacValidator, async (req, res, next) => {
 
       await pool.query(
         `INSERT INTO slf_idempotency (idempotency_key, request_hash)
-           VALUES ($1, $2)`,
+     VALUES ($1, $2)`,
         [idempotencyKey, requestHash]
       );
     }
