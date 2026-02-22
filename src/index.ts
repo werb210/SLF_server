@@ -1,3 +1,4 @@
+import { listDeals } from "./slf/deals.controller";
 import express from "express";
 import { ENV } from "./config/env";
 import health from "./routes/health";
@@ -9,6 +10,7 @@ const app = express();
 app.use(express.json());
 app.use("/health", health);
 app.post("/sync/slf", manualSync);
+app.get("/slf/deals", listDeals);
 app.get("/debug/slf-state", (_req, res) =>
   res.json(require("./slf/slf.state").slfState)
 );
