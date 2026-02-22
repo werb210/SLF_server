@@ -2,37 +2,24 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-
-  if (!value || value.trim() === "") {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-
-  return value.trim();
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL is required");
 }
 
-const SLF_TOKEN = requireEnv("SLF_TOKEN");
-const SLF_BASE_URL = requireEnv("SLF_BASE_URL");
-
-if (
-  SLF_TOKEN.includes("YOUR_REAL_TOKEN") ||
-  SLF_TOKEN.includes("ACTUAL_TOKEN")
-) {
-  throw new Error(
-    "SLF_TOKEN is still a placeholder. Insert real token from Sergey."
-  );
+if (!process.env.API_KEY) {
+  throw new Error("API_KEY is required");
 }
 
-if (!SLF_TOKEN.startsWith("Token ")) {
-  throw new Error("SLF_TOKEN must start with 'Token '");
-}
+export const env = {
+  DATABASE_URL: process.env.DATABASE_URL,
+  API_KEY: process.env.API_KEY,
+  PORT: process.env.PORT || "4001",
+};
 
 export const ENV = {
-  PORT: process.env.PORT || "4001",
-  DATABASE_URL: requireEnv("DATABASE_URL"),
-  SLF_BASE_URL,
-  SLF_TOKEN,
+  ...env,
+  SLF_BASE_URL: process.env.SLF_BASE_URL || "",
+  SLF_TOKEN: process.env.SLF_TOKEN || "",
   SLF_PRODUCT_FAMILIES: (process.env.SLF_PRODUCT_FAMILIES || "credit")
     .split(",")
     .map((family: string) => family.trim()),
