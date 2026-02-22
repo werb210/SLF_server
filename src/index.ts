@@ -1,31 +1,44 @@
-import { listDeals } from "./slf/deals.controller";
 import express from "express";
-import { ENV } from "./config/env";
-import health from "./routes/health";
-import { manualSync } from "./slf/manual.controller";
-import { slfState } from "./slf/slf.state";
-import { startSyncWorker } from "./slf/sync.worker";
+import dotenv from "dotenv";
+import { Pool } from "pg";
+import dealsRouter from "./routes/deals";
+
+dotenv.config();
+
+if (!process.env.DATABASE_URL) {
+  console.error("DATABASE_URL is not defined");
+  process.exit(1);
+}
 
 const app = express();
-app.use(express.json());
-app.use("/health", health);
-app.post("/sync/slf", manualSync);
-app.get("/slf/deals", listDeals);
-app.get("/debug/slf-state", (_req, res) =>
-  res.json(require("./slf/slf.state").slfState)
-);
+const port = process.env.PORT || 4001;
 
-app.get("/health/slf", (_req, res) => {
-  res.json({
-    status: slfState.consecutiveFailures > 3 ? "degraded" : "ok",
-    lastSuccessfulSync: slfState.lastSuccessfulSync,
-    lastError: slfState.lastError,
-    consecutiveFailures: slfState.consecutiveFailures,
-  });
+app.use(express.json());
+
+// Health check
+app.get("/health", async (_req, res) => {
+  try {
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+    });
+
+    await pool.query("SELECT 1");
+    return res.json({ status: "ok" });
+  } catch (err) {
+    console.error("Health check failed:", err);
+    return res.status(500).json({ status: "db_error" });
+  }
 });
 
-startSyncWorker();
+// Deals API
+app.use("/deals", dealsRouter);
 
-app.listen(ENV.PORT, () => {
-  console.log(`SLF Server running on port ${ENV.PORT}`);
+// Root route
+app.get("/", (_req, res) => {
+  res.json({ message: "SLF Server Running" });
+});
+
+app.listen(port, () => {
+  console.log(`SLF Server running on port ${port}`);
 });
