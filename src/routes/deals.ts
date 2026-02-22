@@ -1,22 +1,19 @@
 import { Router } from "express";
-import { Pool } from "pg";
+import { z } from "zod";
+import { pool } from "../db";
+import { apiKeyAuth } from "../middleware/auth";
 
 const router = Router();
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+const DealSchema = z.object({
+  id: z.string().min(1),
+  product_family: z.string().min(1),
+  raw_payload: z.record(z.string(), z.any()),
 });
 
-router.post("/", async (req, res) => {
+router.post("/", apiKeyAuth, async (req, res, next) => {
   try {
-    const { id, product_family, raw_payload } = req.body;
-
-    if (!id || !product_family || !raw_payload) {
-      return res.status(400).json({
-        error: "id, product_family and raw_payload are required",
-      });
-    }
+    const data = DealSchema.parse(req.body);
 
     await pool.query(
       `
@@ -28,25 +25,23 @@ router.post("/", async (req, res) => {
         raw_payload = EXCLUDED.raw_payload,
         updated_at = NOW()
       `,
-      [id, product_family, raw_payload]
+      [data.id, data.product_family, data.raw_payload]
     );
 
-    return res.json({ success: true });
+    res.json({ success: true });
   } catch (err) {
-    console.error("DEALS INSERT ERROR:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    next(err);
   }
 });
 
-router.get("/", async (_req, res) => {
+router.get("/", apiKeyAuth, async (_req, res, next) => {
   try {
     const result = await pool.query(
       `SELECT * FROM slf_deals ORDER BY created_at DESC`
     );
-    return res.json(result.rows);
+    res.json(result.rows);
   } catch (err) {
-    console.error("DEALS FETCH ERROR:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    next(err);
   }
 });
 
