@@ -1,15 +1,15 @@
 import cron from "node-cron";
-import { env } from "../config/env";
+import { ENV } from "../config/env";
 import { syncFamily } from "./sync.service";
 import { logger } from "../logger";
 
 export function startSyncWorker() {
-  cron.schedule(`*/${env.SYNC_INTERVAL_MINUTES} * * * *`, async () => {
-    const families = env.SLF_PRODUCT_FAMILIES.split(",");
+  cron.schedule(`*/${ENV.SYNC_INTERVAL_MINUTES} * * * *`, async () => {
+    const families = ENV.SLF_PRODUCT_FAMILIES;
 
     for (const family of families) {
       try {
-        await syncFamily(family.trim());
+        await syncFamily(family);
       } catch (err) {
         logger.error(err);
       }
