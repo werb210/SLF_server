@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
+import crypto from "crypto";
 import { pool } from "../db";
-import { apiKeyAuth } from "../middleware/auth";
+import { apiKeyAuth, hmacValidator } from "../middleware/auth";
+import { limiter } from "../middleware/rateLimit";
 
 const router = Router();
 
@@ -11,36 +13,61 @@ const DealSchema = z.object({
   raw_payload: z.record(z.string(), z.any()),
 });
 
-router.post("/", apiKeyAuth, async (req, res, next) => {
+router.post("/", limiter, apiKeyAuth, hmacValidator, async (req, res, next) => {
+  const ip = req.ip;
+  const headers = req.headers;
+
   try {
     const data = DealSchema.parse(req.body);
 
+    const idempotencyKey = req.header("x-idempotency-key");
+    const requestHash = crypto
+      .createHash("sha256")
+      .update(JSON.stringify(req.body))
+      .digest("hex");
+
+    if (idempotencyKey) {
+      const existing = await pool.query(
+        `SELECT * FROM slf_idempotency WHERE idempotency_key = $1`,
+        [idempotencyKey]
+      );
+
+      if (existing.rows.length > 0) {
+        return res.json({ message: "Duplicate request ignored" });
+      }
+
+      await pool.query(
+        `INSERT INTO slf_idempotency (idempotency_key, request_hash)
+           VALUES ($1, $2)`,
+        [idempotencyKey, requestHash]
+      );
+    }
+
     await pool.query(
-      `
-      INSERT INTO slf_deals (id, product_family, raw_payload)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (id)
-      DO UPDATE SET
-        product_family = EXCLUDED.product_family,
-        raw_payload = EXCLUDED.raw_payload,
-        updated_at = NOW()
-      `,
+      `INSERT INTO slf_deals (id, product_family, raw_payload)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (id)
+         DO UPDATE SET
+           product_family = EXCLUDED.product_family,
+           raw_payload = EXCLUDED.raw_payload,
+           updated_at = NOW()`,
       [data.id, data.product_family, data.raw_payload]
     );
 
-    res.json({ success: true });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.get("/", apiKeyAuth, async (_req, res, next) => {
-  try {
-    const result = await pool.query(
-      `SELECT * FROM slf_deals ORDER BY created_at DESC`
+    await pool.query(
+      `INSERT INTO slf_deal_logs (deal_id, headers, ip)
+         VALUES ($1, $2, $3)`,
+      [data.id, headers, ip]
     );
-    res.json(result.rows);
-  } catch (err) {
+
+    res.json({ success: true });
+  } catch (err: any) {
+    await pool.query(
+      `INSERT INTO slf_deal_logs (headers, ip, error)
+         VALUES ($1, $2, $3)`,
+      [headers, ip, err.message]
+    );
+
     next(err);
   }
 });
