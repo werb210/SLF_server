@@ -3,6 +3,8 @@ import helmet from "helmet";
 import { env } from "./config/env";
 import { pool } from "./db";
 import dealsRouter from "./routes/deals";
+import { calculateCurrentCommission } from "./services/commission.service";
+import "./cron/monthlySnapshot";
 
 const app = express();
 
@@ -33,6 +35,29 @@ app.get("/health", async (_req, res) => {
 });
 
 app.use("/deals", dealsRouter);
+
+const restrictedRoutes = [
+  "/api/client-messaging",
+  "/api/lender-transmission",
+  "/api/document-uploads",
+  "/api/marketing-automation",
+];
+
+restrictedRoutes.forEach((route) => {
+  app.all(`${route}*`, (_req, res) => {
+    res.status(403).json({ error: "Feature not available in SLF server" });
+  });
+});
+
+app.get("/api/slf/reports/summary", async (_req, res) => {
+  try {
+    const summary = await calculateCurrentCommission();
+    res.json(summary);
+  } catch {
+    res.status(500).json({ error: "Failed to generate report" });
+  }
+});
+
 
 app.use((err: any, _req: any, res: any, _next: any) => {
   console.error(err);
