@@ -14,7 +14,7 @@ export const env = {
   DATABASE_URL: required("DATABASE_URL"),
   API_KEY: required("API_KEY"),
   HMAC_SECRET: required("HMAC_SECRET"),
-  PORT: process.env.PORT || "4001",
+  PORT: required("PORT"),
 };
 
 export const ENV = {

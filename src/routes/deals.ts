@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { pool } from "../db";
 import { apiKeyAuth, hmacValidator } from "../middleware/auth";
 import { limiter } from "../middleware/rateLimit";
+import { BUSINESS_UNIT } from "../config/businessUnit";
 
 const router = Router();
 
@@ -50,14 +51,15 @@ router.post("/", limiter, apiKeyAuth, hmacValidator, async (req, res, next) => {
     }
 
     await pool.query(
-      `INSERT INTO slf_deals (id, product_family, raw_payload)
-         VALUES ($1, $2, $3)
+      `INSERT INTO slf_deals (id, business_unit, product_family, raw_payload)
+         VALUES ($1, $2, $3, $4)
          ON CONFLICT (id)
          DO UPDATE SET
+           business_unit = EXCLUDED.business_unit,
            product_family = EXCLUDED.product_family,
            raw_payload = EXCLUDED.raw_payload,
            updated_at = NOW()`,
-      [data.id, data.product_family, data.raw_payload]
+      [data.id, BUSINESS_UNIT, data.product_family, data.raw_payload]
     );
 
     await pool.query(
