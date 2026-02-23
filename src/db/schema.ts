@@ -9,7 +9,7 @@ export async function runSchema() {
       external_id TEXT UNIQUE,
       product_family TEXT NOT NULL,
       raw_payload JSONB NOT NULL,
-      status TEXT DEFAULT 'received',
+      status TEXT CHECK (status IN ('received','processing','completed','rejected')) DEFAULT 'received',
       created_at TIMESTAMP DEFAULT NOW()
     );
 
@@ -21,9 +21,10 @@ export async function runSchema() {
 
     CREATE TABLE IF NOT EXISTS slf_logs (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      ip TEXT,
-      headers JSONB,
-      payload JSONB,
+      entity_type TEXT,
+      entity_id UUID,
+      event_type TEXT,
+      metadata JSONB,
       created_at TIMESTAMP DEFAULT NOW()
     );
   `);
