@@ -18,6 +18,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+async function ensureSchema() {
+  await pool.query("ALTER TABLE slf_deals ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'new';");
+}
+
 /**
  * Health Endpoint
  */
@@ -62,6 +66,30 @@ app.get("/sync-status", async (_req, res) => {
   res.json(result.rows[0] || null);
 });
 
-app.listen(process.env.PORT || 4001, () =>
-  console.log("SLF Server running")
-);
+app.get("/api/pipeline", async (_req, res) => {
+  const result = await pool.query(`
+    SELECT status, COUNT(*) as count
+    FROM slf_deals
+    GROUP BY status
+  `);
+
+  res.json(result.rows);
+});
+
+app.get("/api/deals", async (_req, res) => {
+  const result = await pool.query(
+    "SELECT * FROM slf_deals ORDER BY created_at DESC"
+  );
+  res.json(result.rows);
+});
+
+ensureSchema()
+  .then(() => {
+    app.listen(process.env.PORT || 4001, () =>
+      console.log("SLF Server running")
+    );
+  })
+  .catch(err => {
+    console.error("Failed to initialize schema", err);
+    process.exit(1);
+  });

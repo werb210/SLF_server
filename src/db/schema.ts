@@ -7,11 +7,18 @@ export async function runSchema() {
     CREATE TABLE IF NOT EXISTS slf_deals (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       external_id TEXT UNIQUE,
+      business_unit TEXT NOT NULL DEFAULT 'SLF',
       product_family TEXT NOT NULL,
       raw_payload JSONB NOT NULL,
-      status TEXT CHECK (status IN ('received','processing','completed','rejected')) DEFAULT 'received',
-      created_at TIMESTAMP DEFAULT NOW()
+      borrower_name TEXT,
+      amount NUMERIC,
+      status TEXT DEFAULT 'new',
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
     );
+
+    ALTER TABLE slf_deals
+    ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'new';
 
     CREATE TABLE IF NOT EXISTS slf_idempotency (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

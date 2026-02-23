@@ -3,6 +3,7 @@ import { logger } from "../logger";
 import { calculateBackoff } from "./backoff";
 import { slfClient } from "./client";
 import { slfState } from "./slf.state";
+import { normalizeStatus } from "../statusMap";
 
 function getErrorMessage(err: unknown): string {
   if (
@@ -46,7 +47,16 @@ export async function syncFamily(productFamily: string) {
     const { data } = await slfClient.get(endpoint);
 
     for (const deal of data) {
-      await upsertDeal(deal.id || deal.uuid, productFamily, deal);
+      const normalized = normalizeStatus(deal?.status);
+
+      await upsertDeal(
+        deal.id || deal.uuid,
+        productFamily,
+        deal,
+        deal.borrower || deal.borrower_name || null,
+        typeof deal.amount === "number" ? deal.amount : null,
+        normalized
+      );
     }
 
     slfState.lastSuccessfulSync = now;
