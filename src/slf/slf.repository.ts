@@ -1,19 +1,29 @@
 import { pool } from "../db/pool";
 import { BUSINESS_UNIT } from "../config/businessUnit";
 
-export async function upsertDeal(id: string, family: string, payload: unknown) {
+export async function upsertDeal(
+  externalId: string,
+  family: string,
+  payload: unknown,
+  borrowerName: string | null,
+  amount: number | null,
+  status: string
+) {
   await pool.query(
     `
-    INSERT INTO slf_deals (id, business_unit, product_family, raw_payload)
-    VALUES ($1, $2, $3, $4)
-    ON CONFLICT (id)
+    INSERT INTO slf_deals (external_id, business_unit, product_family, raw_payload, borrower_name, amount, status)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    ON CONFLICT (external_id)
     DO UPDATE SET
       business_unit = EXCLUDED.business_unit,
       product_family = EXCLUDED.product_family,
       raw_payload = EXCLUDED.raw_payload,
+      borrower_name = EXCLUDED.borrower_name,
+      amount = EXCLUDED.amount,
+      status = EXCLUDED.status,
       updated_at = NOW()
     `,
-    [id, BUSINESS_UNIT, family, payload]
+    [externalId, BUSINESS_UNIT, family, payload, borrowerName, amount, status]
   );
 }
 
