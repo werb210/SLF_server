@@ -28,8 +28,13 @@ export async function createDeal(req: Request, res: Response) {
 }
 
 export async function getDeals(req: Request, res: Response) {
+  const page = Number(req.query.page || 1);
+  const limit = Number(req.query.limit || 25);
+  const offset = (page - 1) * limit;
+
   const result = await pool.query(
-    "SELECT * FROM slf_deals ORDER BY created_at DESC"
+    "SELECT * FROM slf_deals ORDER BY created_at DESC LIMIT $1 OFFSET $2",
+    [limit, offset]
   );
 
   res.json(result.rows);
