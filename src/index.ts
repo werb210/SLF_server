@@ -11,11 +11,11 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 4001;
-const DATABASE_URL = process.env.DATABASE_URL!;
-const JWT_SECRET = process.env.JWT_SECRET!;
+const DATABASE_URL = process.env.DATABASE_URL;
+const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!DATABASE_URL || !JWT_SECRET) {
-  console.error("Missing environment variables");
+  console.error("Missing DATABASE_URL or JWT_SECRET");
   process.exit(1);
 }
 
@@ -39,8 +39,8 @@ async function bootstrap() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS slf_deals (
       id SERIAL PRIMARY KEY,
-      company_name TEXT,
-      amount NUMERIC,
+      company_name TEXT NOT NULL,
+      amount NUMERIC NOT NULL,
       status TEXT DEFAULT 'new',
       created_at TIMESTAMP DEFAULT NOW()
     );
@@ -65,31 +65,34 @@ function auth(req: any, res: any, next: any) {
 
 function requireRole(role: string) {
   return (req: any, res: any, next: any) => {
-    if (req.user.role !== role && req.user.role !== "admin") {
+    if (req.user.role !== role && req.user.role !== "admin")
       return res.status(403).json({ error: "Forbidden" });
-    }
-
     next();
   };
 }
 
-/* ================= USER CREATE (ADMIN) ================= */
+/* ================= USER CREATE ================= */
 
 app.post("/slf/users/create", auth, requireRole("admin"), async (req, res) => {
-  const { email, password, role } = req.body;
-
-  const hash = await bcrypt.hash(password, 10);
+  const schema = z.object({
+    email: z.string().email(),
+    password: z.string().min(6),
+    role: z.enum(["admin", "staff"])
+  });
 
   try {
+    const data = schema.parse(req.body);
+    const hash = await bcrypt.hash(data.password, 10);
+
     await pool.query(
       `INSERT INTO slf_users (email,password_hash,role)
        VALUES ($1,$2,$3)`,
-      [email, hash, role]
+      [data.email, hash, data.role]
     );
 
     res.json({ created: true });
   } catch {
-    res.status(400).json({ error: "User exists" });
+    res.status(400).json({ error: "User exists or invalid" });
   }
 });
 
@@ -98,17 +101,21 @@ app.post("/slf/users/create", auth, requireRole("admin"), async (req, res) => {
 app.post("/slf/auth/login", async (req, res) => {
   const { email, password } = req.body;
 
-  const user = await pool.query(`SELECT * FROM slf_users WHERE email=$1`, [email]);
+  const user = await pool.query(
+    `SELECT * FROM slf_users WHERE email=$1`,
+    [email]
+  );
 
-  if (!user.rows.length) {
+  if (!user.rows.length)
     return res.status(401).json({ error: "Invalid credentials" });
-  }
 
-  const valid = await bcrypt.compare(password, user.rows[0].password_hash);
+  const valid = await bcrypt.compare(
+    password,
+    user.rows[0].password_hash
+  );
 
-  if (!valid) {
+  if (!valid)
     return res.status(401).json({ error: "Invalid credentials" });
-  }
 
   const token = jwt.sign(
     { email: user.rows[0].email, role: user.rows[0].role },
@@ -116,14 +123,14 @@ app.post("/slf/auth/login", async (req, res) => {
     { expiresIn: "8h" }
   );
 
-  res.json({ token });
+  res.json({ token, role: user.rows[0].role });
 });
 
 /* ================= CREATE DEAL ================= */
 
 const DealSchema = z.object({
   company_name: z.string(),
-  amount: z.number(),
+  amount: z.number()
 });
 
 app.post("/slf/deals", auth, requireRole("staff"), async (req, res) => {
@@ -145,25 +152,46 @@ app.post("/slf/deals", auth, requireRole("staff"), async (req, res) => {
 /* ================= UPDATE STAGE ================= */
 
 app.post("/slf/deals/:id/status", auth, requireRole("staff"), async (req, res) => {
-  const { status } = req.body;
-  const { id } = req.params;
+  const schema = z.object({
+    status: z.string()
+  });
 
-  await pool.query(`UPDATE slf_deals SET status=$1 WHERE id=$2`, [status, id]);
+  try {
+    const { status } = schema.parse(req.body);
+    const { id } = req.params;
 
-  res.json({ updated: true });
+    await pool.query(
+      `UPDATE slf_deals SET status=$1 WHERE id=$2`,
+      [status, id]
+    );
+
+    res.json({ updated: true });
+  } catch {
+    res.status(400).json({ error: "Invalid status update" });
+  }
 });
 
-/* ================= LIST DEALS ================= */
+/* ================= PIPELINE VIEW ================= */
 
-app.get("/slf/deals", auth, async (_req, res) => {
-  const deals = await pool.query(`SELECT * FROM slf_deals ORDER BY created_at DESC`);
+app.get("/slf/pipeline", auth, async (req, res) => {
+  const deals = await pool.query(`
+    SELECT * FROM slf_deals
+    ORDER BY created_at DESC
+  `);
 
-  res.json(deals.rows);
+  const grouped: any = {};
+
+  deals.rows.forEach(d => {
+    if (!grouped[d.status]) grouped[d.status] = [];
+    grouped[d.status].push(d);
+  });
+
+  res.json(grouped);
 });
 
-/* ================= REPORTS ================= */
+/* ================= SUMMARY REPORT ================= */
 
-app.get("/slf/reports/summary", auth, requireRole("admin"), async (_req, res) => {
+app.get("/slf/reports/summary", auth, requireRole("admin"), async (req, res) => {
   const totals = await pool.query(`
     SELECT 
       COUNT(*) as total_deals,
