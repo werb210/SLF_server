@@ -5,19 +5,25 @@ import bcrypt from "bcrypt";
 import rateLimit from "express-rate-limit";
 import { Pool } from "pg";
 import { z } from "zod";
+import { ENV } from "./config/env";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 4001;
-const DATABASE_URL = process.env.DATABASE_URL;
-const JWT_SECRET = process.env.JWT_SECRET;
+const PORT = ENV.PORT;
+const DATABASE_URL = ENV.DATABASE_URL;
 
-if (!DATABASE_URL || !JWT_SECRET) {
-  console.error("Missing DATABASE_URL or JWT_SECRET");
+if (!DATABASE_URL) {
+  console.error("Missing DATABASE_URL");
   process.exit(1);
 }
+
+if (!ENV.JWT_SECRET) {
+  throw new Error("JWT_SECRET must be defined");
+}
+
+const jwtSecret: string = ENV.JWT_SECRET;
 
 const pool = new Pool({ connectionString: DATABASE_URL });
 
@@ -56,7 +62,7 @@ function auth(req: any, res: any, next: any) {
   if (!header) return res.status(401).json({ error: "No token" });
 
   try {
-    req.user = jwt.verify(header.split(" ")[1], JWT_SECRET);
+    req.user = jwt.verify(header.split(" ")[1], jwtSecret);
     next();
   } catch {
     res.status(401).json({ error: "Invalid token" });
@@ -119,7 +125,7 @@ app.post("/slf/auth/login", async (req, res) => {
 
   const token = jwt.sign(
     { email: user.rows[0].email, role: user.rows[0].role },
-    JWT_SECRET,
+    jwtSecret,
     { expiresIn: "8h" }
   );
 
