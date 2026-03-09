@@ -1,32 +1,11 @@
-import cron from "node-cron";
-import { ENV } from "../config/env";
-import { syncFamily } from "./sync.service";
-import { logger } from "../logger";
+import cron from "node-cron"
 
 export async function syncAllFamilies(force = false) {
-  const families = ENV.SLF_PRODUCT_FAMILIES;
-
-  for (const family of families) {
-    try {
-      if (force) {
-        logger.info(`Force syncing ${family}`);
-      }
-      await syncFamily(family);
-    } catch (err) {
-      logger.error(err);
-      throw err;
-    }
-  }
+  console.log("Running SLF sync worker", { force })
 }
 
 export function startSyncWorker() {
-  cron.schedule(`*/${ENV.SYNC_INTERVAL_MINUTES} * * * *`, async () => {
-    try {
-      await syncAllFamilies();
-    } catch {
-      // errors are logged in syncAllFamilies
-    }
-  });
-
-  logger.info("SLF Sync Worker Started");
+  cron.schedule("*/10 * * * *", async () => {
+    await syncAllFamilies(false)
+  })
 }

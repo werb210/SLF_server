@@ -1,24 +1,28 @@
-import { Request, Response, NextFunction } from "express";
-import { pool } from "../db";
+import { Pool } from "pg"
+import { Request, Response, NextFunction } from "express"
+import crypto from "crypto"
 
-export async function idempotency(req: Request, res: Response, next: NextFunction) {
-  const key = req.headers["x-idempotency-key"] as string;
+export function idempotency(pool: Pool) {
+  return async (req: Request & { rawBody?: string }, res: Response, next: NextFunction) => {
+    const key = req.headers["x-idempotency-key"] as string
+    if (!key) return res.status(400).json({ error: "Missing idempotency key" })
 
-  if (!key) return next();
+    const hash = crypto.createHash("sha256").update(req.rawBody || "").digest("hex")
 
-  const exists = await pool.query(
-    "SELECT 1 FROM slf_idempotency WHERE idempotency_key=$1",
-    [key]
-  );
+    const existing = await pool.query(
+      "SELECT * FROM slf_idempotency WHERE idempotency_key=$1",
+      [key]
+    )
 
-  if ((exists.rowCount ?? 0) > 0) {
-    return res.status(409).json({ error: "Duplicate request" });
+    if ((existing.rowCount ?? 0) > 0) {
+      return res.status(409).json({ error: "Duplicate request" })
+    }
+
+    await pool.query(
+      "INSERT INTO slf_idempotency (idempotency_key, request_hash) VALUES ($1,$2)",
+      [key, hash]
+    )
+
+    next()
   }
-
-  await pool.query(
-    "INSERT INTO slf_idempotency (idempotency_key) VALUES ($1)",
-    [key]
-  );
-
-  next();
 }
